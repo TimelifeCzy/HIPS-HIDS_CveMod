@@ -14,4 +14,4 @@ v2.0功能：
 3. dll进程监控：文件/进程/线程/注册表监控
 4. 提供SSDT/IDT基础修复功能。
 
-提供的学习笔记及文档发布在了看雪：https://bbs.pediy.com/user-home-819685.htm
+学习笔记及文档请跳转看雪：https://bbs.pediy.com/user-home-819685.htm
