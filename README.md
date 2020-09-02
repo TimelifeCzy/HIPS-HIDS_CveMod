@@ -1,4 +1,5 @@
 # Windows-Driver-Rootkit-LearningTools
+希望初学者能从该项目中学到知识，从应用/方案/技术实现综合完成项目。
 v1.0功能：
 1. minfilter管理：它允许自定义规则标记进程允许访问的目录/文件属性(r-w-x-off/on);
 2. wfp管理：提供了基础的tcp/udp过滤规则
