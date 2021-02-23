@@ -1,0 +1,13 @@
+﻿  pch.cpp
+  Cve_2016_0189.cpp
+f:\exp\cvecheck\cve_2016_0189.cpp(78): warning C4551: function call missing argument list
+  HlprDllAlpc.cpp
+f:\exp\cvecheck\hlprdllalpc.cpp(243): warning C4101: 'nLen': unreferenced local variable
+f:\exp\cvecheck\hlprdllalpc.cpp(242): warning C4101: 'bBreak': unreferenced local variable
+f:\exp\cvecheck\hlprdllalpc.cpp(240): warning C4101: 'pmReceive': unreferenced local variable
+  Generating Code...
+  dllmain.cpp
+  hook.cpp
+f:\exp\cvecheck\hook.cpp(94): warning C4102: 'skip_e9_rewrite': unreferenced label
+  Generating Code...
+  CveCheck.vcxproj -> F:\Exp\Debug\CveCheck.dll
