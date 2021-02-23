@@ -1,0 +1,10 @@
+﻿F:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\VC\VCTargets\Microsoft.CppBuild.targets(402,5): warning MSB8038: Spectre mitigation is enabled but Spectre mitigated libraries are not found.  Verify that the Visual Studio Workload includes the Spectre mitigated libraries.  See https://aka.ms/Ofhn4c for more information.
+  CveServer.cpp
+  HlprServerAlpcPort.cpp
+f:\exp\cveserver\hlprserveralpcport.cpp(234): error C2664: 'NTSTATUS NtAlpcSendWaitReceivePort(HANDLE,ULONG,PPORT_MESSAGE,PALPC_MESSAGE_ATTRIBUTES,PPORT_MESSAGE,PULONG,PALPC_MESSAGE_ATTRIBUTES,PLARGE_INTEGER)': cannot convert argument 6 from 'SIZE_T *' to 'PULONG'
+  f:\exp\cveserver\hlprserveralpcport.cpp(234): note: Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+f:\exp\cveserver\hlprserveralpcport.cpp(250): error C2664: 'NTSTATUS NtAlpcSendWaitReceivePort(HANDLE,ULONG,PPORT_MESSAGE,PALPC_MESSAGE_ATTRIBUTES,PPORT_MESSAGE,PULONG,PALPC_MESSAGE_ATTRIBUTES,PLARGE_INTEGER)': cannot convert argument 6 from 'SIZE_T *' to 'PULONG'
+  f:\exp\cveserver\hlprserveralpcport.cpp(250): note: Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+  InjectMonProcessTest.cpp
+  Generating Code...
+f:\exp\cveserver\injectmonprocesstest.cpp(82): warning C4715: 'InjectDllByRemoteThread': not all control paths return a value

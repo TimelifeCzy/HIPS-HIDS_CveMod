@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="InjectDLL">
+      <UniqueIdentifier>{0642eb13-87fe-4e34-bb43-e2736be3a246}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HlprServerAlpc">
+      <UniqueIdentifier>{28875359-c107-4b33-9d99-8fd451865003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HlprServerPip">
+      <UniqueIdentifier>{83cf6352-a5d7-4de1-b7d1-2b53b97ba516}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="HlprServerAlpc.cpp">
+      <Filter>HlprServerAlpc</Filter>
+    </ClCompile>
+    <ClCompile Include="CveServerMain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HlprServerPip.cpp">
+      <Filter>HlprServerPip</Filter>
+    </ClCompile>
+    <ClCompile Include="InjectMonProcessTest.cpp">
+      <Filter>InjectDLL</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="InjectMonProcess.h">
+      <Filter>InjectDLL</Filter>
+    </ClInclude>
+    <ClInclude Include="HlprServerAlpc.h">
+      <Filter>HlprServerAlpc</Filter>
+    </ClInclude>
+    <ClInclude Include="HlprServerPip.h">
+      <Filter>HlprServerPip</Filter>
+    </ClInclude>
+    <ClInclude Include="ntbasic.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

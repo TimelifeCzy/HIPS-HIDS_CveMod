@@ -1,0 +1,7 @@
+﻿  CveServerMain.cpp
+  HlprServerAlpc.cpp
+f:\exp\cveserver\hlprserveralpc.cpp(339): warning C4101: 'bTemp': unreferenced local variable
+  HlprServerPip.cpp
+  InjectMonProcessTest.cpp
+  Generating Code...
+  CveServer.vcxproj -> F:\Exp\CveServer\..\bin\Win32\CveServer.exe
