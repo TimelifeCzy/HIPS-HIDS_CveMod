@@ -105,21 +105,21 @@ ALPC服务端，分别处理DLL_Monitor消息和Driver_Monitor。
 
 负责注入DLL(注入器) --- 代码中直接用了Apc注入，不在传输至r3，因为这种方案会导致死锁。
 
-![image-20210115142115005](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115142115005.png)
+![image-20210115142115005](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115142115005.png)
 
 ###### Driver  <--> Server: 
 
 负责回调拦截相关进程/模块，监控触发注入操作。
 
-![image-20210115142814972](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115142814972.png)
+![image-20210115142814972](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115142814972.png)
 
 Driver会先初始化ALPC_PORT，发送ALPC_DRIVER_CONNECTSERVER告诉服务端请求连接。
 
-![image-20210115142910717](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115142910717.png)
+![image-20210115142910717](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115142910717.png)
 
 Server接收到Driver请求构造回复，用于第一次上线将R3初始化句柄传递至r0，后续没用这种方式。
 
-![image-20210115143408508](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115143408508.png)
+![image-20210115143408508](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115143408508.png)
 
 Driver连接成功后创建读线程，AlpcRecvServerMsgROUTINE负责阻塞接收服务端发来的MSG请求。
 
@@ -134,7 +134,7 @@ Driver连接成功后创建读线程，AlpcRecvServerMsgROUTINE负责阻塞接�
 		NULL);
 ```
 
-![image-20210115143801916](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115143801916.png)
+![image-20210115143801916](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115143801916.png)
 
 进行模块监控，回调内容针对CVE-2016-0189，过滤条件oleaut32.dll和iexplore.exe。
 
@@ -146,7 +146,7 @@ status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)PsLoadImageCall
 if (NULL != wcsstr(FullImageName->Buffer, L"Windows\\System32\\oleaut32.dll"))
 ````
 
-![image-20210115144631190](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115144631190.png)
+![image-20210115144631190](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115144631190.png)
 
 &emsp;&emsp;如果是iexplore.exe进程且加载了oleaut32.dll(代码中是注册的模块回调，先监视ole加载，后判断iexplore进程)，触发注入之后ALPC发送r3开始注入，回调中KeWaitForSingleObject事件等待，等待注入完成再执行，真实测试中r3再跨进程内存申请会阻塞VirtualAllocEx(这种方案会造成死锁)，所以直接回调APC注入解决。
 
@@ -190,7 +190,7 @@ if (NULL != wcsstr(FullImageName->Buffer, L"Windows\\System32\\oleaut32.dll"))
 
 &emsp;&emsp;注入使用常规远程线程注入方式会出现问题，上述已经解释原因。Server创建Share共享内存，发送给Driver可以进行ALPC注入了。
 
-![image-20210115145130376](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115145130376.png)
+![image-20210115145130376](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115145130376.png)
 
 ALPC_DLL_INJECT/FAILUER调用号一开始是为了r3注入准备的，但现在功能只是激活回调中的等待事件。
 
@@ -205,11 +205,11 @@ ALPC_DLL_INJECT/FAILUER调用号一开始是为了r3注入准备的，但现在�
 
 Driver读线程中接收到INJECT.MSG功能号，进行事件唤醒。
 
-![image-20210115145357915](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115145357915.png)
+![image-20210115145357915](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115145357915.png)
 
 事件唤醒完成之后，进行apc-DLL注入，如下所示：
 
-![image-20210121163150471](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210121163150471.png)
+![image-20210121163150471](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210121163150471.png)
 
 基本第一阶段完成，第二阶段DLL-hook级检测。
 
@@ -217,15 +217,15 @@ Driver读线程中接收到INJECT.MSG功能号，进行事件唤醒。
 
 DLL负责InlineHook，监控相关内存变化漏洞规则验证，触发通知Server处理。
 
-![image-20210115150208235](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115150208235.png)
+![image-20210115150208235](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115150208235.png)
 
 DLL注入iexplore.exe成功之后，先要获取共享MAP中的ImageBase，其次初始ALPC Port。
 
-![image-20210115150402583](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115150402583.png)
+![image-20210115150402583](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115150402583.png)
 
 &emsp;&emsp;DLL-ALPC初始化完成后，下面就是CVE-2016-0819检测，可以弹窗阻塞iex进程，OD附加进行调试，主要调试hook代码及CVE检测代码。
 
-![image-20210121160442609](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210121160442609.png)
+![image-20210121160442609](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210121160442609.png)
 
 
 
@@ -254,15 +254,15 @@ NTSTATUS InitVariantChangeTypeExHook(
 
 &emsp;IDA反汇编拷贝前12个字用来Hook。申请内存tramp，拷贝前12byte，紧跟着jmp跳转至原函数地址+12，这样调用原函数时候，tramp就可以直接调用，从而绕过hook的前12byte(Sandboxie代码中有Hook分析函数，寻找合适的Hook点)：
 
-![image-20210115150825200](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115150825200.png)
+![image-20210115150825200](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115150825200.png)
 
 ![img](file:///C:\Users\Administrator\AppData\Roaming\Tencent\Users\502740367\QQ\WinTemp\RichOle\O~WWD_6A3GT8[LMD4J[MID5.png)
 
-![image-20210121195338663](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210121195338663.png)
+![image-20210121195338663](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210121195338663.png)
 
 Hook完成之后就是对关键点检测，银雁冰文章中给出了具体的检测方案，直接套用如下：
 
-![image-20210115151456904](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115151456904.png)
+![image-20210115151456904](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/blob/master/image-20210115151456904.png)
 
 &emsp;&emsp;如果是漏洞，事件等待，DLL发送ALPC_DLL_MONITOR_CVE告诉Server监视到漏洞，Server将通过匿名管道将PID-CVE数据发送至UI,UI等待用户操作。
 
