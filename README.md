@@ -48,7 +48,7 @@ https://bbs.pediy.com/thread-228371.htm
 
 2) r3_Inject_DLL注入IE进行Inlinehook，监控变量及内存否存在uaf。触发拦截通知ServerPort，UI决定动作放行/拦截。
 
-![123](C:\Users\Administrator\Desktop\CveCheck\123.png)
+![png1](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/png1.png)
 
 
 
@@ -56,7 +56,7 @@ https://bbs.pediy.com/thread-228371.htm
 
 ##### 基础框架：
 
-![image-20210115141215393](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115141215393.png)
+![image-20210115141215393](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/image-20210115141215393.png)
 
 alpc工程是lib，Cvecheck（DLL）-CveServer（Server）都链接该Lib库通信。
 
@@ -90,7 +90,7 @@ enum CommandofCodeID
 
 &emsp;&emsp;服务端绑定NtAlpcAccept同时，也会发送给客户端消息Msg，参数7不但关联MessageId，且可以返回一个数据包给客户端，客户端接收之后可以处理第一次的上线请求。
 
-![image-20210115141642449](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210115141642449.png)
+![image-20210115141642449](https://github.com/TimelifeCzy/HIPS-HIDS_CveMod/image-20210115141642449.png)
 
 &emsp;&emsp;客户端发送Server消息单纯PortHandle是不够的，发送至客户端pmRequest里面的MessageId字段标识客户端连接时候ID。
 &emsp;&emsp;r3创建事件消息，句柄通过上线握手传递给驱动(客户端)，驱动拿到手进行对象获取。应用场景就驱动事件等待r3处理进入睡眠,处理完成后被唤醒继续执行。代码中给出了这种方式应用示例没有使用，注入成功理论传递至驱动在做判断/使用内核态事件。
