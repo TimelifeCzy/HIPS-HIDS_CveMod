@@ -1,8 +1,14 @@
+#include "pch.h"
 #include "ntbasic.h"
 #include "HlprDllAlpc.h"
 #define MSG_LEN 128
 
 #include <stdio.h>
+
+namespace
+{
+	const SIZE_T kMaxAlpcPayload = 0x500;
+}
 
 /*************************************************************************
 	lnk lib extern
@@ -167,15 +173,24 @@ extern "C"
 		);
 }
 
+typedef struct _ALPC_RECV_BUFFER
+{
+	PORT_MESSAGE PortMessage;
+	BYTE Data[kMaxAlpcPayload];
+} ALPC_RECV_BUFFER, *PALPC_RECV_BUFFER;
+
 HANDLE g_DllhPort;
 
 LPVOID CreateMsgMem(
-	PPORT_MESSAGE PortMessage, 
+	PPORT_MESSAGE PortMessage,
 	SIZE_T MessageSize,
 	LPVOID Message
 )
 {
 	LPVOID lpMem = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, MessageSize + sizeof(PORT_MESSAGE));
+	if (!lpMem)
+		return NULL;
+
 	memmove(lpMem, PortMessage, sizeof(PORT_MESSAGE));
 	memmove((BYTE*)lpMem + sizeof(PORT_MESSAGE), Message, MessageSize);
 	return(lpMem);
@@ -183,71 +198,86 @@ LPVOID CreateMsgMem(
 
 void HlprAlpcSendMsg(LPVOID Info, const int MsgLen)
 {
+	if (!Info || MsgLen <= 0)
+		return;
+	if (MsgLen > 0x7FFF - (int)sizeof(PORT_MESSAGE))
+		return;
+
 	LPVOID lpMsg;
 	PORT_MESSAGE pSend;
+	const CSHORT dataLength = (CSHORT)MsgLen;
+	const CSHORT totalLength = (CSHORT)(MsgLen + sizeof(PORT_MESSAGE));
 	RtlSecureZeroMemory(&pSend, sizeof(PORT_MESSAGE));
-	pSend.u1.s1.DataLength = MsgLen;
-	pSend.u1.s1.TotalLength = MsgLen + sizeof(PORT_MESSAGE);
+	pSend.u1.s1.DataLength = dataLength;
+	pSend.u1.s1.TotalLength = totalLength;
 	lpMsg = CreateMsgMem(&pSend, MsgLen, Info);
-	if (g_DllhPort > 0 && lpMsg)
+	if (!lpMsg)
+		return;
+
+	if (g_DllhPort != NULL)
 	{
-		// error: 0xC0000707
 		NtAlpcSendWaitReceivePort(g_DllhPort, 0, (PPORT_MESSAGE)lpMsg, 0, NULL, NULL, 0, 0);
-		HeapFree(GetProcessHeap(), 0, lpMsg);
-		lpMsg = NULL;
 	}
+	HeapFree(GetProcessHeap(), 0, lpMsg);
 }
 
 DWORD AlpcReadMsgCallback(
 	LPVOID lpThreadParameter
 )
 {
-	PORT_MESSAGE lpMem;
-	SIZE_T nLen = 0x500;		// MAX Msg Len
-	NTSTATUS        ntRet;
+	UNREFERENCED_PARAMETER(lpThreadParameter);
+
+	ALPC_RECV_BUFFER recvBuffer;
+	ULONG nLen = (ULONG)sizeof(recvBuffer);
+	NTSTATUS ntRet;
 
 	BOOL bBreak = TRUE;
 	while (bBreak)
 	{
-		RtlSecureZeroMemory(&lpMem, sizeof(PORT_MESSAGE));
-		ntRet = NtAlpcSendWaitReceivePort(g_DllhPort, 0, NULL, NULL, (PPORT_MESSAGE)&lpMem, &nLen, NULL, NULL);
+		RtlSecureZeroMemory(&recvBuffer, sizeof(recvBuffer));
+		nLen = (ULONG)sizeof(recvBuffer);
+		ntRet = NtAlpcSendWaitReceivePort(g_DllhPort, 0, NULL, NULL, &recvBuffer.PortMessage, &nLen, NULL, NULL);
 		if (!ntRet)
 		{
 			do
 			{
-				UNIVERMSG univermsg = *(UNIVERMSG*)((BYTE*)&lpMem + sizeof(PORT_MESSAGE));
-				// HANDLE hEvent = univermsg.Event;
+				if (recvBuffer.PortMessage.u1.s1.DataLength < sizeof(UNIVERMSG))
+					break;
+
+				UNIVERMSG univermsg = *(UNIVERMSG*)recvBuffer.Data;
 				switch (univermsg.ControlId)
 				{
-				case ALPC_DRIVER_CONNECTSERVER_RECV:
+				case ALPC_DLL_CONNECTSERVER_RECV:
 				{
 				}
+				break;
 				default:
 					break;
 				}
 			} while (FALSE);
+		}
+		else
+		{
+			break;
 		}
 	}
 	return 0;
 }
 
 void AlpcDllStart(
-	TCHAR *ServerName
+	TCHAR* ServerName
 )
 {
-	UNICODE_STRING  usPort;
-	PORT_MESSAGE    pmSend;
-	PORT_MESSAGE    pmReceive;
-	NTSTATUS        ntRet;
-	BOOLEAN         bBreak;
-	SIZE_T          nLen;
-	LPVOID          lpMem;
+	UNICODE_STRING usPort;
+	PORT_MESSAGE pmSend;
+	NTSTATUS ntRet;
+	LPVOID lpMem;
 
-	RtlInitUnicodeString(&usPort, L"\\RPC Control\\CveMonitorPort");
+	if (!ServerName)
+		return;
 
-	/*
-		WhileSend
-	*/
+	RtlInitUnicodeString(&usPort, ServerName);
+
 	MONITORCVEINFO moninfo = { 0, };
 	moninfo.univermsg.ControlId = ALPC_DLL_CONNECTSERVER;
 	moninfo.Pid = GetCurrentProcessId();
@@ -256,14 +286,20 @@ void AlpcDllStart(
 	pmSend.u1.s1.DataLength = sizeof(MONITORCVEINFO);
 	pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
 	lpMem = CreateMsgMem(&pmSend, sizeof(MONITORCVEINFO), &moninfo);
+	if (!lpMem)
+		return;
+
 	ntRet = NtAlpcConnectPort(&g_DllhPort, &usPort, NULL, NULL, 0, 0, (PPORT_MESSAGE)lpMem, NULL, 0, 0, 0);
-	if(ntRet == 0)
-		MessageBox(NULL, L"Success Connect Port", L"Inject", MB_OK);
 	HeapFree(GetProcessHeap(), 0, lpMem);
 	lpMem = NULL;
-	nLen = sizeof(PORT_MESSAGE);
-	RtlSecureZeroMemory(&pmReceive, sizeof(PORT_MESSAGE));
-	NtAlpcSendWaitReceivePort(g_DllhPort, 0, (PPORT_MESSAGE)&pmReceive, 0, NULL, NULL, 0, 0);
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&AlpcReadMsgCallback, NULL, 0, NULL);
-	return;
+
+	if (ntRet != 0)
+	{
+		g_DllhPort = NULL;
+		return;
+	}
+
+	HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&AlpcReadMsgCallback, NULL, 0, NULL);
+	if (hThread)
+		CloseHandle(hThread);
 }

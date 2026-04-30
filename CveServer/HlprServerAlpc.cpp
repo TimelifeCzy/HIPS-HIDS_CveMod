@@ -7,7 +7,12 @@
 
 using namespace std;
 
-// HlprServerPip pipsrvobj;
+namespace
+{
+	const SIZE_T kMaxAlpcPayload = 0x500;
+	const char kImageBaseMappingPrefix[] = "ShareImageBase";
+	const wchar_t kCveDecisionEventName[] = L"Global\\CVE160189Decision";
+}
 
 // 负责保存进程pid, 防止注入多次
 vector<int> PidVec;
@@ -186,6 +191,12 @@ extern "C"
 		);
 }
 
+typedef struct _ALPC_RECV_BUFFER
+{
+	PORT_MESSAGE PortMessage;
+	BYTE Data[kMaxAlpcPayload];
+} ALPC_RECV_BUFFER, *PALPC_RECV_BUFFER;
+
 /*************************************************************************
 	function handle Code
 *************************************************************************/
@@ -216,6 +227,8 @@ LPVOID CreateMsgMem(
 )
 {
 	LPVOID lpMem = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, MessageSize + sizeof(PORT_MESSAGE));
+	if (!lpMem)
+		return NULL;
 	memmove(lpMem, PortMessage, sizeof(PORT_MESSAGE));
 	memmove((BYTE*)lpMem + sizeof(PORT_MESSAGE), Message, MessageSize);
 	return(lpMem);
@@ -227,6 +240,7 @@ LPVOID CreateMsgMem(
 */
 void DispatchMsgHandle(
 	const LPVOID lpMem,
+	const SIZE_T payloadLength,
 	HANDLE* SendtoPort,
 	const int msgid
 )
@@ -234,7 +248,7 @@ void DispatchMsgHandle(
 	// Analysis universMsg
 	UNIVERMSG* Msg = (UNIVERMSG*)((BYTE*)lpMem + sizeof(PORT_MESSAGE));
 
-	if (!Msg && !SendtoPort)
+	if (!Msg || !SendtoPort)
 		return;
 
 	// Get DLL or Driver Msg 
@@ -242,10 +256,13 @@ void DispatchMsgHandle(
 	{
 	case ALPC_DRIVER_DLL_INJECTENABLE:
 	{
+		if (payloadLength < sizeof(DIRVER_INJECT_DLL))
+			return;
+
 		DIRVER_INJECT_DLL* InjectDllInject = (DIRVER_INJECT_DLL*)((BYTE*)lpMem + sizeof(PORT_MESSAGE));
 
 		// 保证只注入一次
-		int nCount = std::count(PidVec.begin(), PidVec.end(), InjectDllInject->Pids);
+		size_t nCount = std::count(PidVec.begin(), PidVec.end(), InjectDllInject->Pids);
 		if (nCount > 0)
 		{
 			return;
@@ -254,20 +271,26 @@ void DispatchMsgHandle(
 
 		if (InjectDllInject)
 		{
-			//
-			// Create Share Memory
-			//
-			HANDLE BaseSharedMapFile = CreateFileMappingA(NULL, NULL, PAGE_READWRITE, 0, 100, "ShareImageBase");
-			LPVOID ImageBaseaddr = MapViewOfFile(BaseSharedMapFile, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
+			char mappingName[64] = { 0 };
+			sprintf_s(mappingName, sizeof(mappingName), "%s_%lu", kImageBaseMappingPrefix, InjectDllInject->Pids);
+
+			HANDLE BaseSharedMapFile = CreateFileMappingA(NULL, NULL, PAGE_READWRITE, 0, sizeof(ULONG_PTR), mappingName);
+			LPVOID ImageBaseaddr = NULL;
 			UNIVERMSG univermsg = { 0, };
+			univermsg.ControlId = ALPC_DLL_INJECT_FAILUER;
+
+			if (BaseSharedMapFile)
+				ImageBaseaddr = MapViewOfFile(BaseSharedMapFile, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(ULONG_PTR));
+
 			if (ImageBaseaddr)
 			{
-				memcpy(ImageBaseaddr, &InjectDllInject->ImageBase, sizeof(ULONG));
+				ULONG_PTR imageBase = (ULONG_PTR)InjectDllInject->ImageBase;
+				memcpy(ImageBaseaddr, &imageBase, sizeof(imageBase));
 				univermsg.ControlId = ALPC_DLL_INJECT_SUCCESS;
+				UnmapViewOfFile(ImageBaseaddr);
 			}
-			else
-				// log 
-				univermsg.ControlId = ALPC_DLL_INJECT_FAILUER;
+			if (BaseSharedMapFile)
+				CloseHandle(BaseSharedMapFile);
 
 			// Inject Dll
 			// wchar_t MonitorDLLPath[] = L"CveCheck.dll";
@@ -293,20 +316,23 @@ void DispatchMsgHandle(
 		通知UI需要处理命中事件，等待UI返回
 	--*/
 	{
+		if (payloadLength < sizeof(MONITORCVEINFO))
+			return;
+
 		MONITORCVEINFO* MonCveInfo = (MONITORCVEINFO*)((BYTE*)lpMem + sizeof(PORT_MESSAGE));
-		//if (!pipsrvobj)
-		//	break;
-		// pipsrvobj.PipSendMsg((wchar_t*)MonCveInfo, sizeof(MONITORCVEINFO));
+		UNREFERENCED_PARAMETER(MonCveInfo);
+		g_ServerPip.PipSendMsg((wchar_t*)MonCveInfo, sizeof(MONITORCVEINFO));
 		//
 		// Wait UI recv
 		// if perimnt
 		//
 		if (1)
 		{
-			HANDLE evt = OpenEvent(EVENT_ALL_ACCESS, FALSE, L"CVE-2016-0819");
+			HANDLE evt = OpenEvent(EVENT_MODIFY_STATE, FALSE, kCveDecisionEventName);
 			if (evt)
 			{
 				SetEvent(evt);
+				CloseHandle(evt);
 			}
 		}
 	}
@@ -329,20 +355,16 @@ void AlpcPortStart(
 	OBJECT_ATTRIBUTES       objPort;
 	UNICODE_STRING          usPortName;
 	PORT_MESSAGE            pmRequest;
-	PORT_MESSAGE            pmReceive;
+	ALPC_RECV_BUFFER        recvBuffer;
 	NTSTATUS                ntRet;
 	BOOLEAN                 bBreak;
 	HANDLE                  hConnectedPort;
 	HANDLE                  hPort;
-	SIZE_T                  nLen;
+	ULONG                   nLen;
 	void*                   lpMem;
-	BYTE                    bTemp;
 
 
 	// pipsrvobj.StartServerPip();
-
-	// 初始化PidVec/保证回调中能进入循环
-	PidVec.push_back(8888);
 
 	RtlInitUnicodeString(&usPortName, PortName);
 	InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
@@ -351,19 +373,26 @@ void AlpcPortStart(
 	ntRet = NtAlpcCreatePort(&hPort, &objPort, &serverPortAttr);
 	if (!ntRet)
 	{
-		nLen = 0x500;
-		ntRet = NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, &pmReceive, &nLen, NULL, NULL);
-		// Analysis universMsg
-		UNIVERMSG* Msg = (UNIVERMSG*)((BYTE*)&pmReceive + sizeof(PORT_MESSAGE));
-		if (!ntRet)
+		while (TRUE)
 		{
+			nLen = sizeof(recvBuffer);
+			RtlSecureZeroMemory(&recvBuffer, sizeof(recvBuffer));
+			ntRet = NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, &recvBuffer.PortMessage, &nLen, NULL, NULL);
+			if (ntRet != 0)
+				break;
+
+			if (recvBuffer.PortMessage.u1.s1.DataLength < sizeof(UNIVERMSG))
+				continue;
+
+			UNIVERMSG* Msg = (UNIVERMSG*)recvBuffer.Data;
+			lpMem = NULL;
 			switch (Msg->ControlId)
 			{
 			case ALPC_DRIVER_CONNECTSERVER:
 			{
 				// 发送上线成功消息/发送事件句柄
 				RtlSecureZeroMemory(&pmRequest, sizeof(pmRequest));
-				pmRequest.MessageId = pmReceive.MessageId;
+				pmRequest.MessageId = recvBuffer.PortMessage.MessageId;
 				UNIVERMSG universmg = { 0, };
 				universmg.ControlId = ALPC_DRIVER_CONNECTSERVER_RECV;
 				// r3事件句柄
@@ -378,7 +407,7 @@ void AlpcPortStart(
 			{
 				// 发送上线成功消息/发送事件句柄
 				RtlSecureZeroMemory(&pmRequest, sizeof(pmRequest));
-				pmRequest.MessageId = pmReceive.MessageId;
+				pmRequest.MessageId = recvBuffer.PortMessage.MessageId;
 				UNIVERMSG universmg = { 0, };
 				universmg.ControlId = ALPC_DLL_CONNECTSERVER_RECV;
 				// r3事件句柄
@@ -390,8 +419,10 @@ void AlpcPortStart(
 			}
 			break;
 			default:
-				break;
+				continue;
 			}
+			if (!lpMem)
+				continue;
 			ntRet = NtAlpcAcceptConnectPort(&hConnectedPort,
 				hPort,
 				0,
@@ -404,22 +435,28 @@ void AlpcPortStart(
 			HeapFree(GetProcessHeap(), 0, lpMem);
 			lpMem = NULL;
 			if (ntRet != 0)
-				return;
+				continue;
 
 			bBreak = TRUE;
 			while (bBreak)
 			{
-				//
-				// 单线程：循环接收客户端消息
-				// 多线程：区分客户端/资源共享等操作
-				//
-				NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, (PPORT_MESSAGE)&pmReceive, &nLen, NULL, NULL);
-				// Empty Msg
-				if (0 >= pmReceive.u1.s1.DataLength)
+				nLen = sizeof(recvBuffer);
+				RtlSecureZeroMemory(&recvBuffer, sizeof(recvBuffer));
+				ntRet = NtAlpcSendWaitReceivePort(hConnectedPort, 0, NULL, NULL, &recvBuffer.PortMessage, &nLen, NULL, NULL);
+				if (ntRet != 0)
 					break;
+				// Empty Msg
+				if (recvBuffer.PortMessage.u1.s1.DataLength < sizeof(UNIVERMSG))
+					continue;
 				// Dispatch Msg
-				DispatchMsgHandle(&pmReceive, &hConnectedPort, pmReceive.MessageId);
+				DispatchMsgHandle(&recvBuffer.PortMessage,
+					recvBuffer.PortMessage.u1.s1.DataLength,
+					&hConnectedPort,
+					recvBuffer.PortMessage.MessageId);
 			}
+
+			NtAlpcDisconnectPort(hConnectedPort, 0);
+			CloseHandle(hConnectedPort);
 		}
 	}
 }

@@ -6,6 +6,7 @@
 
 //#pragma comment(lib,"alpc.lib
 #include "HlprServerAlpc.h"
+#include "HlprServerPip.h"
 
 // Master Thread No-Exit
 void wait()
@@ -18,11 +19,12 @@ void wait()
 	}
 }
 
-void PipServerCallback(
-	wchar_t* PortName
+DWORD WINAPI PipServerCallback(
+	LPVOID lpParameter
 )
 {
-
+	UNREFERENCED_PARAMETER(lpParameter);
+	return (DWORD)(g_ServerPip.StartServerPip() == 0 ? 0 : 1);
 }
 
 int main()
@@ -35,7 +37,9 @@ int main()
 {
 	getchar();
 
-	HANDLE hDllPortHandle, hDriverPortHandle;
+	HANDLE hPipeThreadHandle = NULL;
+	HANDLE hDllPortHandle = NULL;
+	HANDLE hDriverPortHandle = NULL;
 	WCHAR CveDriverPortName[] = L"\\RPC Control\\CveDriverPort";
 	WCHAR CveMonitorPortName[] = L"\\RPC Control\\CveMonitorPort";
 	// remote debug breakpointer
@@ -43,14 +47,30 @@ int main()
 	InitEvent();
 
 	// PipServer
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&PipServerCallback, NULL, 0, NULL);
+	hPipeThreadHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&PipServerCallback, NULL, 0, NULL);
 	// Driver ALPC Services Port 
 	hDriverPortHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&AlpcPortStart, (LPVOID)CveDriverPortName, 0, NULL);
 	// DLL Monitor ALPC Services Port
 	hDllPortHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&AlpcPortStart, (LPVOID)CveMonitorPortName, 0, NULL);
-	
-	// wait();
-	WaitForSingleObject(hDriverPortHandle, INFINITE);
+
+	if (!hDriverPortHandle || !hDllPortHandle)
+	{
+		if (hPipeThreadHandle)
+			CloseHandle(hPipeThreadHandle);
+		if (hDriverPortHandle)
+			CloseHandle(hDriverPortHandle);
+		if (hDllPortHandle)
+			CloseHandle(hDllPortHandle);
+		return 1;
+	}
+
+	if (hPipeThreadHandle)
+		CloseHandle(hPipeThreadHandle);
+
+	HANDLE waitHandles[] = { hDriverPortHandle, hDllPortHandle };
+	WaitForMultipleObjects(_countof(waitHandles), waitHandles, TRUE, INFINITE);
+	CloseHandle(hDriverPortHandle);
+	CloseHandle(hDllPortHandle);
 
 	return 0;
 }

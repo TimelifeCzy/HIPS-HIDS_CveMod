@@ -25,11 +25,11 @@ Environment:
 
 PFLT_FILTER gFilterHandle = NULL;
 ULONG_PTR OperationStatusCtx = 1;
-extern g_pInjectEvent;
-extern g_kEvent;
+extern PKEVENT g_pInjectEvent;
+extern KEVENT g_kEvent;
 
 // iex Pid
-ULONG IexpPid = 0;
+HANDLE IexpPid = NULL;
 
 // Apc Inject LoadLibrary
 extern P_LoadLibraryExA Sys_LoadLibrary;
@@ -652,7 +652,7 @@ VOID PsLoadImageCallbacks(
 )
 {
 	// exit
-	if (ImageInfo == NULL)
+	if (ImageInfo == NULL || FullImageName == NULL || FullImageName->Buffer == NULL)
 		return;
 
 	WCHAR kernel32Mask[] = L"*\\KERNEL32.DLL";
@@ -677,42 +677,42 @@ VOID PsLoadImageCallbacks(
 			return;
 
 		PVOID ImagepathNametemp = NULL;
-		ULONG ImagepathNameaddrs = 0;
-		ImagepathNametemp = ((ULONG)pCurrentEprocess + 0x1a8);
-		ImagepathNameaddrs = *((ULONG*)ImagepathNametemp);
+		ULONG_PTR ImagepathNameaddrs = 0;
+		ImagepathNametemp = (PUCHAR)pCurrentEprocess + 0x1a8;
+		ImagepathNameaddrs = *((ULONG_PTR*)ImagepathNametemp);
 		UNICODE_STRING* unStr = NULL;
 
 		__try
 		{
 			if (!ImagepathNameaddrs)
 				return;
-			ProbeForRead(ImagepathNameaddrs, sizeof(ULONG), sizeof(ULONG));
+			ProbeForRead((PVOID)ImagepathNameaddrs, sizeof(ULONG_PTR), sizeof(UCHAR));
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
 			return;
 		}
 
 		// 2. Peb.ProcessParameters
-		ImagepathNametemp = ImagepathNameaddrs + 0x10;
-		ImagepathNameaddrs = *((ULONG*)ImagepathNametemp);
+		ImagepathNametemp = (PVOID)(ImagepathNameaddrs + 0x10);
+		ImagepathNameaddrs = *((ULONG_PTR*)ImagepathNametemp);
 
 		__try
 		{
 			if (!ImagepathNameaddrs)
 				return;
-			ProbeForRead(ImagepathNameaddrs, sizeof(ULONG), sizeof(ULONG));
+			ProbeForRead((PVOID)ImagepathNameaddrs, sizeof(ULONG_PTR), sizeof(UCHAR));
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
 			return;
 		}
 
 		// 3. ProcessParameters --> _RTL_USER_PROCESS_PARAMETERS.ImagePathName
-		ImagepathNameaddrs = (ULONG)ImagepathNameaddrs + 0x38;
+		ImagepathNameaddrs += 0x38;
 		__try
 		{
 			if (!ImagepathNameaddrs)
 				return;
-			ProbeForRead(ImagepathNameaddrs, sizeof(ULONG), sizeof(ULONG));
+			ProbeForRead((PVOID)ImagepathNameaddrs, sizeof(UNICODE_STRING), sizeof(UCHAR));
 			unStr = (UNICODE_STRING*)ImagepathNameaddrs;
 			DbgPrint("[%wZ]\n", unStr);
 		}
@@ -730,21 +730,19 @@ VOID PsLoadImageCallbacks(
 			{
 				// Send MSG r3 Server to Process Hoo    kMsg 
 				 DIRVER_INJECT_DLL drinjectdll = { 0, };
-				 INT32 Pids = 0;
+				 LARGE_INTEGER waitTimeout;
 				 drinjectdll.ImageBase = ImageInfo->ImageBase;
-				 drinjectdll.Pids = PsGetCurrentProcessId();
+				 drinjectdll.Pids = HandleToULong(ProcessId);
 				 drinjectdll.univermsg.ControlId = ALPC_DRIVER_DLL_INJECTENABLE;
 
-				 AlpcSendMsgtoInjectDll(&drinjectdll);
+				 if (NT_SUCCESS(AlpcSendMsgtoInjectDll(&drinjectdll)))
+				 {
+					waitTimeout.QuadPart = -3 * 10 * 1000 * 1000;
 
-				//  Wait CreateMapping
-				if (&g_kEvent)
-				{
-					// KeWaitForSingleObject(g_pInjectEvent, Executive, KernelMode, FALSE, NULL); // INFINITE 
-					// Wait
-					KeWaitForSingleObject(&g_kEvent, Executive, KernelMode, FALSE, NULL);
+					//  Wait CreateMapping
+					KeWaitForSingleObject(&g_kEvent, Executive, KernelMode, FALSE, &waitTimeout);
 					KeClearEvent(&g_kEvent);
-				}
+				 }
 
 				KAPC* Apc;
 				Apc = (PKAPC)ExAllocatePool(NonPagedPool, sizeof(KAPC));
@@ -801,17 +799,6 @@ void InitRegedit(
 	HANDLE m_Rootkey = NULL;
 	ULONG m_ulResult = 0;
 	NTSTATUS nStatus;
-	DbgBreakPoint();
-	nStatus = ZwOpenKeyEx(
-		&m_Rootkey,
-		KEY_ALL_ACCESS,
-		&objAttributes,
-		0,
-		NULL,
-		REG_OPTION_NON_VOLATILE,
-		m_ulResult
-	);
-
 	nStatus = ZwOpenKey(&m_Rootkey, KEY_ALL_ACCESS, &objAttributes);
 	if (NT_SUCCESS(nStatus))
 	{
@@ -875,7 +862,7 @@ void QueryRegrule(
 	HANDLE m_Rootkey = NULL;
 	ULONG m_ulResult = 0;
 	NTSTATUS nStatus;
-	nStatus = ZwOpenKeyEx(&m_Rootkey, KEY_ALL_ACCESS, &objAttributes, 0, NULL, REG_OPTION_NON_VOLATILE, m_ulResult);
+	nStatus = ZwOpenKey(&m_Rootkey, KEY_ALL_ACCESS, &objAttributes);
 	if (!NT_SUCCESS(nStatus))
 	{
 		ZwClose(m_Rootkey);
@@ -1059,11 +1046,11 @@ Return Value:
 	PEPROCESS pCurrentEprocess = NULL;
 	pCurrentEprocess = PsGetCurrentProcess();
 	if (!pCurrentEprocess)
-		return ;
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	// KdPrint(("process string: %s\n", ((char*)pCurrentEprocess + 0x16c)));
 
 	PVOID ImagepathNametemp = NULL;
-	ULONG ImagepathNameaddrs = 0;
+	ULONG_PTR ImagepathNameaddrs = 0;
 
 #ifdef _WIN64 
 
@@ -1072,39 +1059,39 @@ Return Value:
 	// if (WIN7X32)
 	{
 		// 1. Get Current Path EPROCESS.Peb
-		ImagepathNametemp = ((ULONG)pCurrentEprocess + 0x1a8);
-		ImagepathNameaddrs = *((ULONG*)ImagepathNametemp);
+		ImagepathNametemp = (PUCHAR)pCurrentEprocess + 0x1a8;
+		ImagepathNameaddrs = *((ULONG_PTR*)ImagepathNametemp);
 		__try
 		{
 			if (!ImagepathNameaddrs)
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			ProbeForRead(ImagepathNameaddrs, sizeof(ULONG), sizeof(ULONG));
+			ProbeForRead((PVOID)ImagepathNameaddrs, sizeof(ULONG_PTR), sizeof(UCHAR));
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 		}
 
 		// 2. Peb.ProcessParameters
-		ImagepathNametemp = ImagepathNameaddrs + 0x10;
-		ImagepathNameaddrs = *((ULONG*)ImagepathNametemp);
+		ImagepathNametemp = (PVOID)(ImagepathNameaddrs + 0x10);
+		ImagepathNameaddrs = *((ULONG_PTR*)ImagepathNametemp);
 
 		__try
 		{
 			if (!ImagepathNameaddrs)
-				return;
-			ProbeForRead(ImagepathNameaddrs, sizeof(ULONG), sizeof(ULONG));
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			ProbeForRead((PVOID)ImagepathNameaddrs, sizeof(ULONG_PTR), sizeof(UCHAR));
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 		}
 
 		// 3. ProcessParameters --> _RTL_USER_PROCESS_PARAMETERS.ImagePathName
-		ImagepathNameaddrs = (ULONG)ImagepathNameaddrs + 0x38;
+		ImagepathNameaddrs += 0x38;
 		__try
 		{
 			if (!ImagepathNameaddrs)
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			ProbeForRead(ImagepathNameaddrs, sizeof(ULONG), sizeof(ULONG));
+			ProbeForRead((PVOID)ImagepathNameaddrs, sizeof(UNICODE_STRING), sizeof(UCHAR));
 			unStr = (UNICODE_STRING*)ImagepathNameaddrs;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
@@ -1119,7 +1106,7 @@ Return Value:
 #endif // _WIN64
 	PKEY_BASIC_INFORMATION data = NULL;
 	PLIST_ENTRY pListEntry = NULL;
-	unsigned char IRP_MJ_CODE = "";
+	UCHAR IRP_MJ_CODE = 0;
 	pListEntry = g_rulenamelist.listEntry.Flink;
 
 	// 4. filter
@@ -1464,7 +1451,7 @@ AntsDrPostFileHide(
 		if (Data->Iopb->Parameters.DirectoryControl.QueryDirectory.MdlAddress != NULL)
 		{
 
-			Bufferptr = MmGetSystemAddressForMdl(Data->Iopb->Parameters.DirectoryControl.QueryDirectory.MdlAddress,
+			Bufferptr = MmGetSystemAddressForMdlSafe(Data->Iopb->Parameters.DirectoryControl.QueryDirectory.MdlAddress,
 				NormalPagePriority);
 		}
 		else
@@ -1536,23 +1523,13 @@ ULONG GetObject_Type_ALL(
 	PDRIVER_OBJECT DriverObject
 )
 {
-	/*
-		csrss.exe: \Windows\ApiPort
-	*/
-	ULONG ObjectTypeAddr = 0;
-	__asm
-	{
-		// 保存环境
-		push eax;
-		// 1 设备对象就是 OBJECT_BODY 也就是 -0x18是OBJECT_HREAD -0xc是OBJECT_TYPE(OBJECT_HANDLE + 0x8) or vista之后TypeIndex
-		lea eax, DriverObject;
-		sub eax, 0xc;
-		mov ObjectTypeAddr, eax;
-		// 恢复环境
-		pop eax;
-	}
+	UNREFERENCED_PARAMETER(DriverObject);
 
-	return ObjectTypeAddr;
+#ifdef _WIN64
+	return 0;
+#else
+	return (ULONG)((ULONG_PTR)DriverObject - 0x0C);
+#endif
 }
 
 /*************************************************************************
@@ -1576,10 +1553,22 @@ NTSTATUS
 	status = InitAlpcAddrs();
 	if (!NT_SUCCESS(status))
 		return status;
-	 status = AlpcDriverStart();
-	 status = PsSetCreateProcessNotifyRoutineEx((PCREATE_PROCESS_NOTIFY_ROUTINE_EX)Process_NotifyProcessEx, FALSE);
-	 status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)PsLoadImageCallbacks);
-	return status;
+	status = AlpcDriverStart();
+	if (!NT_SUCCESS(status))
+		return status;
+
+	status = PsSetCreateProcessNotifyRoutineEx((PCREATE_PROCESS_NOTIFY_ROUTINE_EX)Process_NotifyProcessEx, FALSE);
+	if (!NT_SUCCESS(status))
+		return status;
+
+	status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)PsLoadImageCallbacks);
+	if (!NT_SUCCESS(status))
+	{
+		PsSetCreateProcessNotifyRoutineEx((PCREATE_PROCESS_NOTIFY_ROUTINE_EX)Process_NotifyProcessEx, TRUE);
+		return status;
+	}
+
+	return STATUS_SUCCESS;
 	
 }
 

@@ -8,11 +8,11 @@ UINT32 HashString(
 	PCHAR pcString
 )
 {
-	INT Counter = NULL;
+	CHAR Counter = 0;
 	UINT32 Hash = 0, N = 0;
 	while ((Counter = *pcString++))
 	{
-		Hash ^= ((N++ & 1) == NULL) ? ((Hash << 5) ^ Counter ^ (Hash >> 1)) :
+		Hash ^= ((N++ & 1) == 0) ? ((Hash << 5) ^ Counter ^ (Hash >> 1)) :
 			(~((Hash << 9) ^ Counter ^ (Hash >> 3)));
 	}
 
@@ -79,7 +79,7 @@ NTSTATUS DllInject(
 	CLIENT_ID cidprocess = { 0 };
 	// Set Inject DLL
 	CHAR DllFormatPath[] = "C:\\CveCheck.dll";
-	ULONG Size = strlen(DllFormatPath) + 1;
+	SIZE_T Size = strlen(DllFormatPath) + 1;
 	PVOID pvMemory = NULL;
 
 	cidprocess.UniqueProcess = ProcessId;

@@ -1,4 +1,5 @@
 #pragma once
+#include "Resource.h"
 class BaseWinDlg : public WindowImplBase
 {
 public:
@@ -7,9 +8,14 @@ public:
 	~BaseWinDlg();
 
 public:
+	virtual CDuiString GetSkinFolder();
 	virtual CDuiString GetSkinFile();
+	virtual UILIB_RESOURCETYPE GetResourceType() const;
+	virtual LPCTSTR GetResourceID() const;
 	virtual LPCTSTR GetWindowClassName(void) const;
 	virtual void Notify(TNotifyUI &msg);
+	virtual LRESULT HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+	virtual LRESULT OnNcHitTest(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
 	virtual LRESULT OnClose(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
 	{
 		PostQuitMessage(0);

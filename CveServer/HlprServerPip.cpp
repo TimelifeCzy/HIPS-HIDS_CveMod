@@ -4,7 +4,12 @@
 
 using namespace std;
 
-HANDLE m_PipHandle;
+HlprServerPip g_ServerPip;
+
+namespace
+{
+	HANDLE m_PipHandle = NULL;
+}
 
 HlprServerPip::HlprServerPip()
 {
@@ -24,15 +29,18 @@ int HlprServerPip::StartServerPip(
 	{
 		// Log
 		cout << "[+]CreateNamedPipeW Error: %d\r\n" << GetLastError() << endl;
+		m_PipHandle = NULL;
 		return -1;
 	}
 
 	// Wait UI-Connect 
 	BOOL nRet = ConnectNamedPipe(m_PipHandle, NULL);
-	if (!nRet)
+	if (!nRet && GetLastError() != ERROR_PIPE_CONNECTED)
 	{
 		// Log
 		cout << "[+]ConnectNamedPipe  Client Connect: %d\r\n" << GetLastError() << endl;
+		CloseHandle(m_PipHandle);
+		m_PipHandle = NULL;
 		return -1;
 	}
 
@@ -44,7 +52,7 @@ int HlprServerPip::PipSendMsg(
 	const int bufLen
 )
 {
-	if (m_PipHandle)
+	if (m_PipHandle != NULL)
 	{
 		DWORD wrtSize = 0;
 		BOOL nRet = WriteFile(m_PipHandle, buf, bufLen, &wrtSize, NULL);
@@ -59,7 +67,7 @@ int HlprServerPip::PipSendMsg(
 
 void HlprServerPip::PipClose()
 {
-	if (m_PipHandle)
+	if (m_PipHandle != NULL)
 		CloseHandle(m_PipHandle);
 	m_PipHandle = NULL;
 }

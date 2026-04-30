@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window size="460,240" mininfo="460,240" caption="0,0,460,38" sizebox="0,0,0,0" roundcorner="0,0" bkcolor="#FFF8FAFC">
+    <VerticalLayout inset="0,0,0,0" childpadding="0" bkcolor="#FFF8FAFC">
+        <HorizontalLayout height="38" inset="12,4,8,4" childpadding="4" bkcolor="#FF263238">
+            <Label text="CVE Intercept" textcolor="#FFFFFFFF" fontsize="15" valign="vcenter" />
+            <Control />
+            <Button name="closebtn" text="X" width="30" height="30" textcolor="#FFFFFFFF" bkcolor="#FF9A2E2E" hotbkcolor="#FFB33434" pushedbkcolor="#FF812626" />
+        </HorizontalLayout>
+        <VerticalLayout inset="12,12,12,12" childpadding="8" bkcolor="#FFFFFFFF" bordercolor="#FFD8DEE3" bordersize="1">
+            <Label text="Monitor event received." textcolor="#FF102027" fontsize="16" />
+            <Label text="CveCheck.dll reported a CVE detection hit." textcolor="#FF52636B" fontsize="13" />
+            <Label text="The server has acknowledged the decision event." textcolor="#FF52636B" fontsize="13" />
+        </VerticalLayout>
+    </VerticalLayout>
+</Window>

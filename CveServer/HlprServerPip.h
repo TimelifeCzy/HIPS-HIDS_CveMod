@@ -2,6 +2,7 @@
 
 class HlprServerPip
 {
+public:
 	HlprServerPip();
 	~HlprServerPip();
 
@@ -13,4 +14,6 @@ public:
 	int PipSendMsg(wchar_t* buf, const int bufLen);
 	void PipClose();
 };
+
+extern HlprServerPip g_ServerPip;
 

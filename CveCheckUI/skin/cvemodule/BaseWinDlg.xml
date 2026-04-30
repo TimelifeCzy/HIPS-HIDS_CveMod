@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window size="520,320" mininfo="520,320" caption="0,0,520,38" sizebox="0,0,0,0" roundcorner="0,0" bkcolor="#FFF6F7F9">
+    <VerticalLayout inset="0,0,0,0" childpadding="0" bkcolor="#FFF6F7F9">
+        <HorizontalLayout height="38" inset="12,4,8,4" childpadding="4" bkcolor="#FF263238">
+            <Label text="CVE Check" textcolor="#FFFFFFFF" fontsize="15" valign="vcenter" />
+            <Control />
+            <Button name="minbtn" text="-" width="30" height="30" textcolor="#FFFFFFFF" bkcolor="#00000000" hotbkcolor="#FF3B4A52" pushedbkcolor="#FF1E2A30" />
+            <Button name="closebtn" text="X" width="30" height="30" textcolor="#FFFFFFFF" bkcolor="#FF9A2E2E" hotbkcolor="#FFB33434" pushedbkcolor="#FF812626" />
+        </HorizontalLayout>
+        <HorizontalLayout inset="12,12,12,0" height="34" childpadding="6" bkcolor="#FFF6F7F9">
+            <Button name="VulnerabilityDefenseButton" text="CVE Detect" width="120" height="28" textcolor="#FF102027" bkcolor="#FFE4EAEE" hotbkcolor="#FFD5DEE4" pushedbkcolor="#FFC5D1D8" />
+            <Button name="FileStaticScanButton" text="Status" width="92" height="28" textcolor="#FF102027" bkcolor="#FFE4EAEE" hotbkcolor="#FFD5DEE4" pushedbkcolor="#FFC5D1D8" />
+            <Control />
+        </HorizontalLayout>
+        <TabLayout name="base_tab_switch" inset="12,10,12,12" selectedid="0">
+            <VerticalLayout bkcolor="#FFFFFFFF" bordercolor="#FFD8DEE3" bordersize="1" inset="14,14,14,14" childpadding="8">
+                <Label text="CVE detection flow is active." textcolor="#FF102027" fontsize="16" />
+                <Label text="Waiting for monitor events from CveCheck.dll." textcolor="#FF52636B" fontsize="13" />
+                <Label text="The UI skin is embedded in the EXE resource." textcolor="#FF52636B" fontsize="13" />
+            </VerticalLayout>
+            <VerticalLayout bkcolor="#FFFFFFFF" bordercolor="#FFD8DEE3" bordersize="1" inset="14,14,14,14" childpadding="8">
+                <Label text="Runtime status" textcolor="#FF102027" fontsize="16" />
+                <Label text="No extra static scan logic is enabled." textcolor="#FF52636B" fontsize="13" />
+            </VerticalLayout>
+        </TabLayout>
+    </VerticalLayout>
+</Window>

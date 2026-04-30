@@ -8,13 +8,21 @@
 KEVENT g_kEvent = { 0 };
 PKEVENT g_pInjectEvent;
 
+typedef struct _ALPC_RECV_BUFFER
+{
+	PORT_MESSAGE PortMessage;
+	UCHAR Data[0x500];
+} ALPC_RECV_BUFFER, *PALPC_RECV_BUFFER;
+
 LPVOID CreateMsgMem(
 	PPORT_MESSAGE PortMessage, 
 	SIZE_T MessageSize, 
 	LPVOID Message
 )
 {
-	LPVOID lpMem = ExAllocatePoolWithTag(PAGE_READWRITE, MessageSize + sizeof(PORT_MESSAGE), 'TAG');
+	LPVOID lpMem = ExAllocatePoolWithTag(PagedPool, MessageSize + sizeof(PORT_MESSAGE), 'TAG');
+	if (!lpMem)
+		return NULL;
 	RtlMoveMemory(lpMem, PortMessage, sizeof(PORT_MESSAGE));
 	RtlMoveMemory((BYTE*)lpMem + sizeof(PORT_MESSAGE), Message, MessageSize);
 	return(lpMem);
@@ -53,21 +61,27 @@ VOID AlpcRecvServerMsgROUTINE(
 	_In_ PVOID StartContext
 )
 {
-	PORT_MESSAGE lpMem;
-	SIZE_T nLen = 0x500;		// MAX Msg Len
+	ALPC_RECV_BUFFER recvBuffer;
+	ULONG nLen = (ULONG)sizeof(recvBuffer);
 	NTSTATUS        ntRet;
+
+	UNREFERENCED_PARAMETER(StartContext);
 
 	BOOL bBreak = TRUE;
 	while (bBreak)
 	{
-		RtlSecureZeroMemory(&lpMem, sizeof(PORT_MESSAGE));
-		ntRet = Sys_NtAlpcSendWaitReceivePort(g_DriverhPort, 0, NULL, NULL, (PPORT_MESSAGE)&lpMem, &nLen, NULL, NULL);
+		RtlSecureZeroMemory(&recvBuffer, sizeof(recvBuffer));
+		nLen = sizeof(recvBuffer);
+		ntRet = Sys_NtAlpcSendWaitReceivePort(g_DriverhPort, 0, NULL, NULL, &recvBuffer.PortMessage, &nLen, NULL, NULL);
 		if (!ntRet)
 		{
 			// 解析UniverMsg结构
 			do
 			{
-				UNIVERMSG univermsg = *(UNIVERMSG*)((BYTE*)&lpMem + sizeof(PORT_MESSAGE));
+				if (recvBuffer.PortMessage.u1.s1.DataLength < sizeof(UNIVERMSG))
+					break;
+
+				UNIVERMSG univermsg = *(UNIVERMSG*)recvBuffer.Data;
 				// HANDLE hEvent = univermsg.Event;
 				switch (univermsg.ControlId)
 				{
@@ -114,6 +128,10 @@ VOID AlpcRecvServerMsgROUTINE(
 				}
 			} while (FALSE);
 		}
+		else
+		{
+			break;
+		}
 	}
 }
 
@@ -125,7 +143,7 @@ NTSTATUS AlpcDriverStart(
 	PORT_MESSAGE    pmReceive;
 	NTSTATUS        ntRet;
 	BOOLEAN         bBreak;
-	SIZE_T          nLen;
+	ULONG           nLen;
 	PVOID			lpMem;
 	OBJECT_ATTRIBUTES       objPort;
 	ALPC_PORT_ATTRIBUTES    serverPortAttr;
@@ -141,6 +159,8 @@ NTSTATUS AlpcDriverStart(
 	pmSend.u1.s1.DataLength = sizeof(msg);
 	pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
 	lpMem = CreateMsgMem(&pmSend, sizeof(msg), &msg);
+	if (!lpMem)
+		return STATUS_INSUFFICIENT_RESOURCES;
 	ntRet = Sys_NtAlpcConnectPort(
 		&g_DriverhPort,
 		&ServerPort,
@@ -156,11 +176,13 @@ NTSTATUS AlpcDriverStart(
 	DbgPrint("[+]Status: 0x%X\r\n", ntRet);
 	ExFreePoolWithTag(lpMem, 'TAG');
 	lpMem = NULL;
+	if (!NT_SUCCESS(ntRet))
+		return ntRet;
 	//
 	// Create Thread wait Server Msg 
 	// PsTerminateSystemThread
 	// 
-	PsCreateSystemThread(
+	ntRet = PsCreateSystemThread(
 		&g_Recvhandle,
 		THREAD_ALL_ACCESS,
 		NULL,
@@ -169,7 +191,7 @@ NTSTATUS AlpcDriverStart(
 		(PKSTART_ROUTINE)AlpcRecvServerMsgROUTINE,
 		NULL);
 
-	return STATUS_UNSUCCESSFUL;
+	return ntRet;
 }
 
 NTSTATUS AlpcSendMsgtoInjectDll(
@@ -183,6 +205,8 @@ NTSTATUS AlpcSendMsgtoInjectDll(
 	pmSend.u1.s1.DataLength = sizeof(DIRVER_INJECT_DLL);
 	pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
 	lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, Cve_Info);
+	if (!lpMem)
+		return STATUS_INSUFFICIENT_RESOURCES;
 	if (g_DriverhPort > 0 && Sys_NtAlpcSendWaitReceivePort && lpMem)
 	{
 		NTSTATUS nRet = STATUS_SUCCESS;
@@ -191,5 +215,8 @@ NTSTATUS AlpcSendMsgtoInjectDll(
 		return nRet;
 	}
 	else
+	{
+		ExFreePoolWithTag(lpMem, 'TAG');
 		return STATUS_UNSUCCESSFUL;
+	}
 }

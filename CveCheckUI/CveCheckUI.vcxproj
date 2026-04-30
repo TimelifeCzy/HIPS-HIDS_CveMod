@@ -23,33 +23,34 @@
     <ProjectGuid>{85AE5F07-41F7-4C46-AB5A-F1901C86EF14}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>CveCheckUI</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>CheckUI</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -79,12 +80,19 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\x64\</OutDir>
+    <IntDir>$(SolutionDir)temp\CveCheckUI\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_d</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\</OutDir>
+    <IntDir>$(SolutionDir)temp\CveCheckUI\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\x64\</OutDir>
+    <IntDir>$(SolutionDir)temp\CveCheckUI\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -102,6 +110,9 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '$(ProjectDir)skin\\cvemodule.zip') { Remove-Item '$(ProjectDir)skin\\cvemodule.zip' -Force }; Compress-Archive -Path '$(ProjectDir)skin\\cvemodule\\*' -DestinationPath '$(ProjectDir)skin\\cvemodule.zip' -Force"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -117,6 +128,9 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '$(ProjectDir)skin\\cvemodule.zip') { Remove-Item '$(ProjectDir)skin\\cvemodule.zip' -Force }; Compress-Archive -Path '$(ProjectDir)skin\\cvemodule\\*' -DestinationPath '$(ProjectDir)skin\\cvemodule.zip' -Force"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -136,6 +150,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '$(ProjectDir)skin\\cvemodule.zip') { Remove-Item '$(ProjectDir)skin\\cvemodule.zip' -Force }; Compress-Archive -Path '$(ProjectDir)skin\\cvemodule\\*' -DestinationPath '$(ProjectDir)skin\\cvemodule.zip' -Force"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -155,6 +172,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '$(ProjectDir)skin\\cvemodule.zip') { Remove-Item '$(ProjectDir)skin\\cvemodule.zip' -Force }; Compress-Archive -Path '$(ProjectDir)skin\\cvemodule\\*' -DestinationPath '$(ProjectDir)skin\\cvemodule.zip' -Force"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BaseWinDlg.h" />
@@ -180,8 +200,14 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Xml Include="..\bin\skin\cvemodule\BaseWinDlg.xml" />
-    <Xml Include="..\bin\skin\cvemodule\InterceptInfoDlg.xml" />
+    <Xml Include="skin\cvemodule\BaseWinDlg.xml" />
+    <Xml Include="skin\cvemodule\InterceptInfoDlg.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DuiLib\DuiLib.vcxproj">
+      <Project>{E106ACD7-4E53-4AEE-942B-D0DD426DB34E}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

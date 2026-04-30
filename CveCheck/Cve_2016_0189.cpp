@@ -1,109 +1,107 @@
-﻿#include "hook.h"
+#include "pch.h"
+#include "hook.h"
 #include "Cve_2016_0189.h"
 #include "HlprDllAlpc.h"
 #include <Windows.h>
+#include <OleAuto.h>
 
-typedef HRESULT (WINAPI *FnVariantChangeTypeExHook)(VARIANTARG *pvargDest, const VARIANTARG *pvarSrc, LCID lcid, USHORT wFlags, VARTYPE vt);
+typedef HRESULT (WINAPI *FnVariantChangeTypeExHook)(VARIANTARG* pvargDest, const VARIANTARG* pvarSrc, LCID lcid, USHORT wFlags, VARTYPE vt);
 FnVariantChangeTypeExHook syscall_VariantChangeTypeEx;
 
 HANDLE g_160189evt;
 
-HRESULT STDAPICALLTYPE VariantChangeTypeExHook_Callback(_Inout_ VARIANTARG * pvargDest,
-	_In_ const VARIANTARG * pvarSrc, _In_ LCID lcid, _In_ USHORT wFlags, _In_ VARTYPE vt)
+namespace
 {
-	ULONG old_cElements = 0, old_cElements1 = 0;
-	HRESULT nRet;
-	if ((lcid == 0x400)
-		&& (wFlags == VARIANT_ALPHABOOL)
-		&& (vt == VT_I4)
-		&& (pvarSrc->vt == VT_DISPATCH)
-		// (pvarSrc->parray->cDims <= 0x10) &&
-		// (pvarSrc->parray->fFeatures & 0x880) &&
-		&& (pvarSrc->parray->rgsabound[0].cElements > 1)
-		)
+	const wchar_t kCveDecisionEventName[] = L"Global\\CVE160189Decision";
+	const DWORD kDecisionWaitTimeoutMs = 3000;
+
+	bool IsCandidateCall(const VARIANTARG* pvarSrc, const LCID lcid, const USHORT wFlags, const VARTYPE vt)
 	{
-		
-		MessageBox(NULL, L"1 Check CVE-2016-0189", L"CVE", MB_OK);
+		if (pvarSrc == NULL)
+			return false;
 
-		old_cElements = pvarSrc->parray->rgsabound[0].cElements;
-		// old_cElements1 = pvarSrc->parray->rgsabound[1].cElements;
-		nRet = syscall_VariantChangeTypeEx(pvargDest, pvarSrc, lcid, wFlags, vt);
+		const VARTYPE srcType = pvarSrc->vt;
+		if (lcid != 0x400 || wFlags != VARIANT_ALPHABOOL || vt != VT_I4)
+			return false;
 
-		HANDLE Thread = NULL;
+		if ((srcType & VT_ARRAY) == 0 || (srcType & VT_TYPEMASK) != VT_DISPATCH)
+			return false;
+
+		if (pvarSrc->parray == NULL || pvarSrc->parray->cDims == 0)
+			return false;
+
+		return pvarSrc->parray->rgsabound[0].cElements > 1;
+	}
+
+	void NotifyMonitor()
+	{
 		MONITORCVEINFO moncveinfo;
-		RtlSecureZeroMemory(&moncveinfo, sizeof(MONITORCVEINFO));
+		RtlSecureZeroMemory(&moncveinfo, sizeof(moncveinfo));
 		moncveinfo.univermsg.ControlId = ALPC_DLL_MONITOR_CVE;
 		lstrcpyW(moncveinfo.cvename, L"CVE-2016-0189");
 		moncveinfo.Pid = GetCurrentProcessId();
-		// Send Msg to Server CVE_2016_0819 Hide
-		HlprAlpcSendMsg(&moncveinfo, sizeof(MONITORCVEINFO));
-		// Test : Event Wait User action: block or Permit
+		HlprAlpcSendMsg(&moncveinfo, sizeof(moncveinfo));
+
 		if (g_160189evt)
-			WaitForSingleObject(g_160189evt, INFINITE);
+			WaitForSingleObject(g_160189evt, kDecisionWaitTimeoutMs);
+	}
+}
 
-		// 调用后如果数组二维大小小于调用前，视为cve-2016-0189
-		if (pvarSrc->parray->rgsabound[0].cElements < old_cElements)
-			//(pvarSrc->parray->rgsabound[1].cElements != old_cElements1))
+HRESULT STDAPICALLTYPE VariantChangeTypeExHook_Callback(_Inout_ VARIANTARG* pvargDest,
+	_In_ const VARIANTARG* pvarSrc, _In_ LCID lcid, _In_ USHORT wFlags, _In_ VARTYPE vt)
+{
+	if (!syscall_VariantChangeTypeEx)
+		return E_FAIL;
+
+	if (IsCandidateCall(pvarSrc, lcid, wFlags, vt))
+	{
+		const ULONG old_cElements = pvarSrc->parray->rgsabound[0].cElements;
+		const HRESULT nRet = syscall_VariantChangeTypeEx(pvargDest, pvarSrc, lcid, wFlags, vt);
+		if (SUCCEEDED(nRet) &&
+			pvarSrc->parray != NULL &&
+			pvarSrc->parray->cDims > 0 &&
+			pvarSrc->parray->rgsabound[0].cElements < old_cElements)
 		{
-			MessageBox(NULL, L"VariantChangeTypeExHook_Callback Check Cve_2016_0189", L"CVE", MB_OK);
-
-			 // ALPC Send
-			 // (warning and clears) or (Send UI warning && wait User Handle)
-			 HANDLE Thread = NULL;
-			 MONITORCVEINFO moncveinfo;
-			 RtlSecureZeroMemory(&moncveinfo, sizeof(MONITORCVEINFO));
-			 moncveinfo.univermsg.ControlId = ALPC_DLL_MONITOR_CVE;
-			 lstrcpyW(moncveinfo.cvename, L"CVE-2016-0189");
-			 moncveinfo.Pid = GetCurrentProcessId();
+			NotifyMonitor();
 		}
 		return nRet;
 	}
-	else
-		return syscall_VariantChangeTypeEx(pvargDest, pvarSrc, lcid, wFlags, vt);
+
+	return syscall_VariantChangeTypeEx(pvargDest, pvarSrc, lcid, wFlags, vt);
 }
 
-// Init VariantChangeTypeEx Hook
-NTSTATUS InitVariantChangeTypeExHook(
-	const ULONG oleauthandle
+int InitVariantChangeTypeExHook(
+	const ULONG_PTR oleauthandle
 )
 {
-	// Get VariantChangeTypeEx Address Save Old Addr or Virtual Mem Copy Opecode to VirMemory
 	PVOID VariantChangeTypeExaddr = GetProcAddress((HMODULE)oleauthandle, "VariantChangeTypeEx");
-	
-	MessageBox(NULL, L"VariantChangeTypeExaddr", L"Inject", MB_OK);
+	if (!VariantChangeTypeExaddr)
+		return -1;
 
-	do
-	{
-		// Check ArgAddr
-		if (!VariantChangeTypeExaddr || !VariantChangeTypeExHook_Callback)
-			break;
-
-		// inline Hook
-		syscall_VariantChangeTypeEx = (FnVariantChangeTypeExHook)Dll_Hook(VariantChangeTypeExaddr, VariantChangeTypeExHook_Callback);
-
-	} while (false);
-
-	return 0;
+	syscall_VariantChangeTypeEx = (FnVariantChangeTypeExHook)Dll_Hook(VariantChangeTypeExaddr, VariantChangeTypeExHook_Callback);
+	return syscall_VariantChangeTypeEx ? 0 : -1;
 }
 
-NTSTATUS EnableVariantChangeTypeExHook()
+int EnableVariantChangeTypeExHook()
 {
 	return 0;
 }
 
-NTSTATUS DisableVariantChangeTypeExHook()
+int DisableVariantChangeTypeExHook()
 {
 	return 0;
 }
 
-NTSTATUS UnVariantChangeTypeExHook()
+int UnVariantChangeTypeExHook()
 {
 	return 0;
 }
 
-int Cve_2016_0189_CheckTryInstall(const ULONG ImageBase)
+int Cve_2016_0189_CheckTryInstall(const ULONG_PTR ImageBase)
 {
-	g_160189evt = CreateEvent(NULL, FALSE, FALSE, L"\\Evnt\\CVE160819");
+	if (!g_160189evt)
+		g_160189evt = CreateEvent(NULL, FALSE, FALSE, kCveDecisionEventName);
+
 	InitVariantChangeTypeExHook(ImageBase);
 	return 0;
 }
@@ -115,5 +113,10 @@ int Cve_2016_0189_CheckDisable()
 
 int Cve_2016_0189_CheckUninstall()
 {
+	if (g_160189evt)
+	{
+		CloseHandle(g_160189evt);
+		g_160189evt = NULL;
+	}
 	return 0;
 }

@@ -12,6 +12,7 @@ ClassGuid = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
 Provider    = %ManufacturerName%
 DriverVer   = 
 CatalogFile = AntsDrv.cat
+PnpLockdown = 1
 
 [DestinationDirs]
 DefaultDestDir          = 12
@@ -21,21 +22,34 @@ MiniFilter.DriverFiles  = 12            ;%windir%\system32\drivers
 ;; Default install sections
 ;;
 
-[DefaultInstall]
+[DefaultInstall.NTx86]
 OptionDesc          = %ServiceDescription%
 CopyFiles           = MiniFilter.DriverFiles
 
-[DefaultInstall.Services]
+[DefaultInstall.NTx86.Services]
+AddService          = %ServiceName%,,MiniFilter.Service
+
+[DefaultInstall.NTamd64]
+OptionDesc          = %ServiceDescription%
+CopyFiles           = MiniFilter.DriverFiles
+
+[DefaultInstall.NTamd64.Services]
 AddService          = %ServiceName%,,MiniFilter.Service
 
 ;;
 ;; Default uninstall sections
 ;;
 
-[DefaultUninstall]
-DelFiles   = MiniFilter.DriverFiles
+[DefaultUninstall.NTx86]
+DelFiles   = MiniFilter.DriverFiles.Del
 
-[DefaultUninstall.Services]
+[DefaultUninstall.NTx86.Services]
+DelService = %ServiceName%,0x200      ;Ensure service is stopped before deleting
+
+[DefaultUninstall.NTamd64]
+DelFiles   = MiniFilter.DriverFiles.Del
+
+[DefaultUninstall.NTamd64.Services]
 DelService = %ServiceName%,0x200      ;Ensure service is stopped before deleting
 
 ;
@@ -71,6 +85,9 @@ HKR,"Instances\"%Instance1.Name%,"Flags",0x00010001,%Instance1.Flags%
 ;
 
 [MiniFilter.DriverFiles]
+%DriverName%.sys
+
+[MiniFilter.DriverFiles.Del]
 %DriverName%.sys
 
 [SourceDisksFiles]
